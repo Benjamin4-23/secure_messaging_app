@@ -1,27 +1,28 @@
 package org.example;
 
-import org.bouncycastle.crypto.digests.SHA256Digest;
-import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
-import org.bouncycastle.crypto.params.HKDFParameters;
-import org.bouncycastle.jce.ECNamedCurveTable;
-import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
-
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.*;
+import javax.crypto.Cipher;
+import javax.crypto.KeyAgreement;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.awt.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.rmi.Naming;
-import java.security.*;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Random;
-import javax.crypto.Cipher;
-import javax.crypto.KeyAgreement;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.*;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -62,8 +63,6 @@ public class Client {
     private static final int TAG_LENGTH = 10;
     private AtomicInteger bumpFileIsGenerated = new AtomicInteger(0);
 
-
-
     public Client() {
         String host = "localhost";
         generateKeys();
@@ -74,7 +73,7 @@ public class Client {
             initialiseJframe();
             initialiseMessagePrinter();
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error in constructor", e);
         }
     }
 
@@ -110,6 +109,7 @@ public class Client {
         panelName.add(textFieldName);
         panelName.add(buttonName);
     }
+
     private void initialiseBumpPanel () {
         buttonBump.addActionListener(new ActionListener() {
             @Override
@@ -124,10 +124,9 @@ public class Client {
                             printer.start();
                         });
                         bumpFinder.start();
-
                     }
                 } catch (Exception ex) {
-                    ex.printStackTrace();
+                    LOGGER.log(Level.SEVERE, "Error bumping", e);
                 }
             }
         });
@@ -141,16 +140,16 @@ public class Client {
             if (bumpFiles != null && bumpFiles.length != 0) {
                 String fileName = bumpFiles[0].getName();
                 return fileName.substring(0, fileName.indexOf("bump.txt"));
-            }
-            else {
+            } else {
                 try {
                     Thread.sleep(500); // Wait for 1 second before checking again
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                } catch (Exception e) {
+                    LOGGER.log(Level.SEVERE, "Error sleeping", e);
                 }
             }
         }
     }
+
     private void initialiseTextPanel () {
         labelText.setLocation(0,0);
         labelText.setPreferredSize(new Dimension(300, 220));
@@ -184,8 +183,8 @@ public class Client {
                 deriveKey();
                 if (labelText.getText().isEmpty()) labelText.setText(name +": "+message);
                 else labelText.setText(labelText.getText() + "\n" + name +": "+message);
-            } catch (Exception ex) {
-                System.out.println(ex.getMessage());
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "Error sending message", e);
             }
         }
     }
@@ -205,7 +204,7 @@ public class Client {
                 deriveKey();
             }
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error in read()", e);
         }
     }
 
@@ -217,7 +216,7 @@ public class Client {
                     Thread.sleep(800);
                 }
             } catch (Exception e) {
-                System.out.println(e.getMessage());
+                LOGGER.log(Level.SEVERE, "Error reading messages", e);
             }
         });
     }
@@ -230,16 +229,17 @@ public class Client {
             if (secretKey == null) {
                 input = Arrays.copyOf(privateKey.getEncoded(), privateKey.getEncoded().length + othersPublicKey.getEncoded().length);
                 System.arraycopy(othersPublicKey.getEncoded(), 0, input, privateKey.getEncoded().length, othersPublicKey.getEncoded().length);
-                KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", "BC");
+                KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH");
                 keyAgreement.init(privateKey);
                 keyAgreement.doPhase(othersPublicKey, true);
                 generatedSecret = keyAgreement.generateSecret();
                 System.arraycopy(generatedSecret, 0, derivedKey, 0, 16);
-            }
-            else {
-                HKDFBytesGenerator hkdf = new HKDFBytesGenerator(new SHA256Digest());
-                hkdf.init(new HKDFParameters(generatedSecret, null, null));
-                hkdf.generateBytes(derivedKey, 0, derivedKey.length);
+            } else {
+                SecretKeySpec secretKeySpec = new SecretKeySpec(generatedSecret, "AES");
+                Mac mac = Mac.getInstance("HmacSHA256");
+                mac.init(secretKeySpec);
+                byte[] hkdfOutput = mac.doFinal(Base64.getEncoder().encodeToString(secretKey.getEncoded()).getBytes(StandardCharsets.UTF_8));
+                System.arraycopy(hkdfOutput, 0, derivedKey, 0, 16);
             }
 
             secretKey = new SecretKeySpec(derivedKey, "AES");
@@ -247,7 +247,6 @@ public class Client {
             LOGGER.log(Level.SEVERE, "Error deriving key", e);
         }
     }
-
 
     private String getHash(String text) {
         try {
@@ -265,19 +264,22 @@ public class Client {
         return null;
     }
 
-    private void generateKeys(){
+    private void generateKeys() {
         try {
-            Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-            ECNamedCurveParameterSpec spec = ECNamedCurveTable.getParameterSpec("secp256k1");
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("ECDH", "BC");
-            generator.initialize(spec, new SecureRandom());
-            KeyPair keyPair = generator.generateKeyPair();
+            String curveName = "secp256r1";
+            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC");
+            ECGenParameterSpec ecGenParameterSpec = new ECGenParameterSpec(curveName);
+            keyPairGenerator.initialize(ecGenParameterSpec);
+            KeyPair keyPair = keyPairGenerator.generateKeyPair();
             publicKey = keyPair.getPublic();
             privateKey = keyPair.getPrivate();
+
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error Generating public/private key", e);
+            e.printStackTrace();
         }
+
     }
+
 
     private String encrypt(String plaintext) {
         try {
@@ -326,12 +328,14 @@ public class Client {
         receiveCell = randomIndex;
         try (FileWriter writer = new FileWriter(name.toLowerCase() + "bump.txt")) {
             writer.write(pubKeyString+":"+randomIndex+":"+tag);
-         } catch (Exception e) {
+        } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error during generation bump file", e);
         }
     }
 
-    private int generateRandomIndex() {return random.nextInt(500);}
+    private int generateRandomIndex() {
+        return random.nextInt(500);
+    }
 
     private void getBumpFile(String nameOfPerson) {
         try {

@@ -25,6 +25,8 @@ import javax.crypto.spec.SecretKeySpec;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Client {
     private static ChatServerInterface server;
@@ -55,6 +57,8 @@ public class Client {
     private SecretKey secretKey = null;
     private Cipher cipher;
     private byte[] generatedSecret;
+    private static final Logger LOGGER = Logger.getLogger(Client.class.getName());
+    private static final int TAG_LENGTH = 10;
 
 
 
@@ -163,7 +167,7 @@ public class Client {
     private void send(String message) {
         if (!message.isEmpty()){
             int nextCell = generateRandomIndex();
-            String nextTag = generateTag(10);
+            String nextTag = generateTag(TAG_LENGTH);
             String formattedMessage = name+": "+message+"'"+nextCell+"'"+nextTag;
             String encryptedMessage = encrypt(formattedMessage);
 
@@ -216,11 +220,10 @@ public class Client {
         try {
             byte[] input;
             byte[] derivedKey = new byte[16];
+
             if (secretKey == null) {
-                // Derive key from this persons private key and the other persons public key
-                input = new byte[privateKey.getEncoded().length + othersPublicKey.getEncoded().length];
-                System.arraycopy(privateKey.getEncoded(), 0, input , 0, privateKey.getEncoded().length);
-                System.arraycopy(othersPublicKey.getEncoded(), 0, input , privateKey.getEncoded().length, othersPublicKey.getEncoded().length);
+                input = Arrays.copyOf(privateKey.getEncoded(), privateKey.getEncoded().length + othersPublicKey.getEncoded().length);
+                System.arraycopy(othersPublicKey.getEncoded(), 0, input, privateKey.getEncoded().length, othersPublicKey.getEncoded().length);
                 KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", "BC");
                 keyAgreement.init(privateKey);
                 keyAgreement.doPhase(othersPublicKey, true);
@@ -228,14 +231,14 @@ public class Client {
                 System.arraycopy(generatedSecret, 0, derivedKey, 0, 16);
             }
             else {
-                // Derive key from generated secret key
                 HKDFBytesGenerator hkdf = new HKDFBytesGenerator(new SHA256Digest());
                 hkdf.init(new HKDFParameters(generatedSecret, null, null));
                 hkdf.generateBytes(derivedKey, 0, derivedKey.length);
             }
+
             secretKey = new SecretKeySpec(derivedKey, "AES");
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error deriving key", e);
         }
     }
 
@@ -250,8 +253,8 @@ public class Client {
                 hexString.append(hex);
             }
             return hexString.toString();
-        } catch(Exception e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error creating hash", e);
         }
         return null;
     }
@@ -266,7 +269,7 @@ public class Client {
             publicKey = keyPair.getPublic();
             privateKey = keyPair.getPrivate();
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error Generating public/private key", e);
         }
     }
 
@@ -278,10 +281,9 @@ public class Client {
             byte[] combined = new byte[ivBytes.length + encryptedBytes.length];
             System.arraycopy(ivBytes, 0, combined, 0, ivBytes.length);
             System.arraycopy(encryptedBytes, 0, combined, ivBytes.length, encryptedBytes.length);
-            String encryptedText = Base64.getEncoder().encodeToString(combined);
-            return encryptedText;
+            return Base64.getEncoder().encodeToString(combined);
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error during encryption", e);
             return null;
         }
     }
@@ -295,11 +297,10 @@ public class Client {
             String plainText = new String(decryptedBytes, StandardCharsets.UTF_8);
             return plainText;
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error during decryption", e);
             return null;
         }
     }
-
 
     private String generateTag(int length) {
         StringBuilder stringBuilder = new StringBuilder(length);
@@ -313,46 +314,39 @@ public class Client {
         // Write public key, initial receivingTag and initial receiving cell index to file
         byte[] pubKeyBytes = publicKey.getEncoded();
         String pubKeyString = Base64.getEncoder().encodeToString(pubKeyBytes);
-        String tag = generateTag(10);
+        String tag = generateTag(TAG_LENGTH);
         receiveTag = tag;
         int randomIndex = generateRandomIndex();
         receiveCell = randomIndex;
         try (FileWriter writer = new FileWriter(name.toLowerCase() + "bump.txt")) {
             writer.write(pubKeyString+":"+randomIndex+":"+tag);
          } catch (Exception e) {
-             e.printStackTrace();
-         }
+            LOGGER.log(Level.SEVERE, "Error during generation bump file", e);
+        }
     }
 
     private int generateRandomIndex() {return random.nextInt(500);}
 
     private void getBumpFile(String nameOfPerson) {
         try {
-            FileReader reader = new FileReader(nameOfPerson.toLowerCase() + "bump.txt");
-            StringBuilder fileContent = new StringBuilder();
-            int content;
-            while ((content = reader.read()) != -1) {
-                fileContent.append((char) content);
+            Path bumpFilePath = Path.of(nameOfPerson.toLowerCase() + "bump.txt");
+            if (Files.exists(bumpFilePath)) {
+                String fileContent = Files.readString(bumpFilePath);
+                String[] parts = fileContent.split(":");
+
+                byte[] pubKeyBytes = Base64.getDecoder().decode(parts[0]);
+                X509EncodedKeySpec keySpec = new X509EncodedKeySpec(pubKeyBytes);
+                KeyFactory keyFactory = KeyFactory.getInstance("EC");
+                othersPublicKey = keyFactory.generatePublic(keySpec);
+
+                sendCell = Integer.parseInt(parts[1]);
+                sendTag = parts[2];
+                deriveKey();
+
+                Files.delete(bumpFilePath);
             }
-
-            String[] parts = fileContent.toString().split(":");
-
-            // Rebuild public key of other person
-            byte[] pubKeyBytes = Base64.getDecoder().decode(parts[0]);
-            X509EncodedKeySpec keySpec = new X509EncodedKeySpec(pubKeyBytes);
-            KeyFactory keyFactory = KeyFactory.getInstance("EC");
-            othersPublicKey = keyFactory.generatePublic(keySpec);
-
-            sendCell = Integer.parseInt(parts[1]);
-            sendTag = parts[2];
-            deriveKey();
-
-            reader.close();
-
-            Files.delete(Path.of(nameOfPerson.toLowerCase() + "bump.txt"));
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error reading or deleting bump file", e);
         }
-
     }
 }

@@ -9,9 +9,7 @@ import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
 import java.awt.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.rmi.Naming;
 import java.security.*;
@@ -29,26 +27,26 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 public class Client {
-    static ChatServerInterface server;
-    JFrame frame = new JFrame("Chat Client ");
-    JPanel panelName = new JPanel();
-    JLabel labelName = new JLabel("Enter your name: ");
-    JButton buttonName = new JButton("Enter");
-    JTextField textFieldName = new JTextField(20);
-    JPanel panelBump = new JPanel();
-    JButton buttonBump = new JButton();
-    JPanel panelText = new JPanel();
-    JTextArea labelText = new JTextArea();
-    JButton buttonText = new JButton("Send");
-    JTextField textFieldText = new JTextField(20);
-    CardLayout cardLayout = new CardLayout();
-    JPanel cardPanel = new JPanel(cardLayout);
-    String name = "";
-    Thread printer;
-    PublicKey publicKey;
-    PrivateKey privateKey;
-    int receiveCell;
-    int sendCell;
+    private static ChatServerInterface server;
+    private JFrame frame = new JFrame("Chat Client ");
+    private JPanel panelName = new JPanel();
+    private JLabel labelName = new JLabel("Enter your name: ");
+    private JButton buttonName = new JButton("Enter");
+    private JTextField textFieldName = new JTextField(20);
+    private JPanel panelBump = new JPanel();
+    private JButton buttonBump = new JButton();
+    private JPanel panelText = new JPanel();
+    private JTextArea labelText = new JTextArea();
+    private JButton buttonText = new JButton("Send");
+    private JTextField textFieldText = new JTextField(20);
+    private CardLayout cardLayout = new CardLayout();
+    private JPanel cardPanel = new JPanel(cardLayout);
+    private String name = "";
+    private Thread printer;
+    private PublicKey publicKey;
+    private PrivateKey privateKey;
+    private int receiveCell;
+    private int sendCell;
     private static final String CHARACTERS = "abcdefghijklmnopqrstuvwxyz";
     private final Random random = new Random();
     private String sendTag;
@@ -56,7 +54,7 @@ public class Client {
     private PublicKey othersPublicKey;
     private SecretKey secretKey = null;
     private Cipher cipher;
-    byte[] generatedSecret;
+    private byte[] generatedSecret;
 
 
 
@@ -96,11 +94,9 @@ public class Client {
             @Override
             public void actionPerformed(ActionEvent e) {
                 name = textFieldName.getText();
-                generateBumpFile();
                 textFieldName.setText("");
                 frame.setTitle("Chat client "+name);
                 cardLayout.show(cardPanel, "panelBump");
-                printer.start();
             }
         });
         textFieldName.setText("");
@@ -112,13 +108,38 @@ public class Client {
         buttonBump.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                if (name.equals("Alice")) getBumpFile("Bob");
-                else getBumpFile("Alice");
-                cardLayout.show(cardPanel, "panelText");
+                try {
+                    generateBumpFile();
+                    Thread bumpFinder = new Thread(()-> {
+                        getBumpFile(getBumpName());
+                        cardLayout.show(cardPanel, "panelText");
+                        printer.start();
+                    });
+                    bumpFinder.start();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
             }
         });
         buttonBump.setText("BUMP");
         panelBump.add(buttonBump);
+    }
+
+    private String getBumpName() {
+        while (true) {
+            File[] bumpFiles = new File(".").listFiles((dir, filename) -> filename.toLowerCase().endsWith("bump.txt") && !filename.toLowerCase().startsWith(name.toLowerCase()));
+            if (bumpFiles != null && bumpFiles.length != 0) {
+                String fileName = bumpFiles[0].getName();
+                return fileName.substring(0, fileName.indexOf("bump.txt"));
+            }
+            else {
+                try {
+                    Thread.sleep(500); // Wait for 1 second before checking again
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
     private void initialiseTextPanel () {
         labelText.setLocation(0,0);
@@ -183,7 +204,7 @@ public class Client {
             try {
                 while (true) {
                     read();
-                    Thread.sleep(200);
+                    Thread.sleep(800);
                 }
             } catch (Exception e) {
                 System.out.println(e.getMessage());

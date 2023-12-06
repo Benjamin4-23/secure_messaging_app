@@ -25,6 +25,7 @@ import javax.crypto.spec.SecretKeySpec;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -59,6 +60,7 @@ public class Client {
     private byte[] generatedSecret;
     private static final Logger LOGGER = Logger.getLogger(Client.class.getName());
     private static final int TAG_LENGTH = 10;
+    private AtomicInteger bumpFileIsGenerated = new AtomicInteger(0);
 
 
 
@@ -113,13 +115,17 @@ public class Client {
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
-                    generateBumpFile();
-                    Thread bumpFinder = new Thread(()-> {
-                        getBumpFile(getBumpName());
-                        cardLayout.show(cardPanel, "panelText");
-                        printer.start();
-                    });
-                    bumpFinder.start();
+                    if (bumpFileIsGenerated.get() == 0) {
+                        bumpFileIsGenerated.set(1);
+                        generateBumpFile();
+                        Thread bumpFinder = new Thread(()-> {
+                            getBumpFile(getBumpName());
+                            cardLayout.show(cardPanel, "panelText");
+                            printer.start();
+                        });
+                        bumpFinder.start();
+
+                    }
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }

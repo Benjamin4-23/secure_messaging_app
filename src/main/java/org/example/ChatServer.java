@@ -5,9 +5,7 @@ import java.net.Socket;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 public class ChatServer extends UnicastRemoteObject implements ChatServerInterface {
     private List<HashMap<String, String>> bulletinBoard;
@@ -52,17 +50,4 @@ public class ChatServer extends UnicastRemoteObject implements ChatServerInterfa
         }
         return null;
     }
-
-    public static void main(String[] args) {
-        try {
-            ChatServer server = new ChatServer();
-            java.rmi.registry.LocateRegistry.createRegistry(1099);
-            java.rmi.Naming.rebind("ChatServer", server);
-            System.out.println("ChatServer is ready.");
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-
 }

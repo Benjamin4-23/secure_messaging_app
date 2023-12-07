@@ -63,7 +63,7 @@ public class LoadBalancer extends UnicastRemoteObject implements LoadBalancerInt
             }
             if (emptyServers > 0 && fullServers < serverConnections.size()-2) {
                 java.rmi.Naming.unbind("rmi://localhost/ChatServer"+serverConnections.size());
-                serverConnections.removeLast();
+                serverConnections.remove(serverConnections.size()-1);
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error checking if extra servers can be removed", e);

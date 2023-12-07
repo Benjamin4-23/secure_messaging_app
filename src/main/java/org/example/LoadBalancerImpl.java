@@ -10,7 +10,7 @@ import java.util.logging.Logger;
 
 public class LoadBalancerImpl extends UnicastRemoteObject implements LoadBalancerInterface {
     private List<ChatServerInterface> serverConnections;
-    private static final Logger LOGGER = Logger.getLogger(Client.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(LoadBalancerImpl.class.getName());
 
     public LoadBalancerImpl() throws RemoteException {
         serverConnections = new ArrayList<>();

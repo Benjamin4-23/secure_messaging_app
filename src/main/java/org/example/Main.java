@@ -1,9 +1,12 @@
 package org.example;
 
 import java.rmi.RemoteException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Main {
     public static void main(String[] args) {
+        Logger LOGGER = Logger.getLogger("Main");
         try {
             java.rmi.registry.LocateRegistry.createRegistry(1099);
             LoadBalancerInterface loadBalancer = new LoadBalancerImpl();
@@ -13,8 +16,8 @@ public class Main {
                 Thread client = new ClientThread();
                 client.start();
             }
-        } catch (Exception ex) {
-            ex.printStackTrace();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error checking if there is a need for extra servers", e);
         }
 
     }

@@ -2,9 +2,11 @@ package org.example;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
-import java.util.List;
 
 public interface ChatServerInterface extends Remote {
-    void postMessage(int cell, String hashedTag, String message) throws RemoteException;
-    String getCell(int cell, String tag) throws RemoteException;
+    boolean postMessage(int cell, String hashedTag, String message) throws RemoteException;
+    String getMessage(int cell, String tag) throws RemoteException;
+    boolean isFull() throws RemoteException;
+    boolean cellContainsTag(int cell, String tag) throws RemoteException;
+    boolean isEmpty() throws RemoteException;
 }

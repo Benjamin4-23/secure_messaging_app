@@ -1,5 +1,7 @@
 package org.example;
 
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -31,7 +33,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Client {
-    private static ChatServerInterface server;
+    private static LoadBalancerInterface loadBalancer;
     private JFrame frame = new JFrame("Chat Client ");
     private JPanel panelName = new JPanel();
     private JLabel labelName = new JLabel("Enter your name: ");
@@ -68,7 +70,7 @@ public class Client {
         generateKeys();
 
         try {
-            server = (ChatServerInterface) Naming.lookup("rmi://" + host + "/ChatServer");
+            loadBalancer = (LoadBalancerInterface) Naming.lookup("rmi://"+host+"/LoadBalancer");
             cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
             initialiseJframe();
             initialiseMessagePrinter();
@@ -142,7 +144,7 @@ public class Client {
                 return fileName.substring(0, fileName.indexOf("bump.txt"));
             } else {
                 try {
-                    Thread.sleep(500); // Wait for 1 second before checking again
+                    Thread.sleep(500);
                 } catch (Exception e) {
                     LOGGER.log(Level.SEVERE, "Error sleeping", e);
                 }
@@ -156,6 +158,16 @@ public class Client {
         labelText.setEditable(false);
         labelText.setLineWrap(true);
         labelText.setWrapStyleWord(true);
+
+        textFieldText.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    buttonText.doClick();
+                }
+            }
+        });
+
         buttonText.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -177,7 +189,10 @@ public class Client {
             String encryptedMessage = encrypt(formattedMessage);
 
             try {
-                server.postMessage(sendCell, getHash(sendTag), encryptedMessage);
+                while (!loadBalancer.postMessage(sendCell, getHash(sendTag), encryptedMessage)) {
+                    nextCell = generateRandomIndex();
+                    nextTag = generateTag(TAG_LENGTH);
+                }
                 sendTag = nextTag;
                 sendCell = nextCell;
                 deriveKey();
@@ -189,9 +204,11 @@ public class Client {
         }
     }
 
+
+
     private void read() {
         try {
-            String message = server.getCell(receiveCell, receiveTag);
+            String message = loadBalancer.getMessage(receiveCell, receiveTag);
             if (message != null) {
                 message = decrypt(message);
                 String[] parts = message.split("'");
@@ -334,7 +351,7 @@ public class Client {
     }
 
     private int generateRandomIndex() {
-        return random.nextInt(500);
+        return random.nextInt(loadBalancer.MAX_CELL_NUMBER);
     }
 
     private void getBumpFile(String nameOfPerson) {

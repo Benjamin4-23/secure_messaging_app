@@ -5,9 +5,9 @@ package org.example;
 public class Main {
     public static void main(String[] args) {
         try {
-            ChatServer server = new ChatServer();
-            java.rmi.registry.LocateRegistry.createRegistry(1099);
-            java.rmi.Naming.rebind("ChatServer", server);
+            LoadBalancerInterface loadBalancer = new LoadBalancer();
+            java.rmi.registry.LocateRegistry.createRegistry(0);
+            java.rmi.Naming.rebind("LoadBalancer", loadBalancer);
 
             Client c1 = new Client();
             Client c2 = new Client();

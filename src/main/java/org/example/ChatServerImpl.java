@@ -8,15 +8,16 @@ import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class ChatServer extends UnicastRemoteObject implements ChatServerInterface {
+public class ChatServerImpl extends UnicastRemoteObject implements ChatServerInterface {
     private HashMap<Integer, HashMap<String, String>> bulletinBoard;
     private static final Logger LOGGER = Logger.getLogger(Client.class.getName());
     private int messageCount;
-    private int MAX_MESSAGE_COUNT = 10000;
+    private final static int MAX_MESSAGE_COUNT = 10000;
 
-    public ChatServer() throws RemoteException {
+    public ChatServerImpl() throws RemoteException {
         bulletinBoard = new HashMap<>();
         messageCount = 0;
+
     }
 
     @Override

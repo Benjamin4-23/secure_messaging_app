@@ -1,16 +1,18 @@
 package org.example;
 
-// Press Shift twice to open the Search Everywhere dialog and type `show whitespaces`,
-// then press Enter. You can now see whitespace characters in your code.
+import java.rmi.RemoteException;
+
 public class Main {
     public static void main(String[] args) {
         try {
-            LoadBalancerInterface loadBalancer = new LoadBalancer();
-            java.rmi.registry.LocateRegistry.createRegistry(0);
+            java.rmi.registry.LocateRegistry.createRegistry(1099);
+            LoadBalancerInterface loadBalancer = new LoadBalancerImpl();
             java.rmi.Naming.rebind("LoadBalancer", loadBalancer);
 
-            Client c1 = new Client();
-            Client c2 = new Client();
+            for (int i = 0; i < 2; i++) {
+                Thread client = new ClientThread();
+                client.start();
+            }
         } catch (Exception ex) {
             ex.printStackTrace();
         }

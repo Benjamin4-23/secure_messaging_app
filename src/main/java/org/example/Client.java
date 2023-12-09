@@ -194,7 +194,7 @@ public class Client {
                 for (String message: messages) {
                     message = decrypt(message);
 
-                    if (message != null && message.split("'").length == 3) {
+                    if (message.split("'").length == 3) {
                         String[] parts = message.split("'");
                         message = parts[0];
                         if (labelText.getText().isEmpty()) labelText.setText(message);
@@ -226,12 +226,9 @@ public class Client {
 
     private void deriveKey() {
         try {
-            byte[] input;
             byte[] derivedKey = new byte[16];
 
             if (secretKey == null) {
-                input = Arrays.copyOf(privateKey.getEncoded(), privateKey.getEncoded().length + othersPublicKey.getEncoded().length);
-                System.arraycopy(othersPublicKey.getEncoded(), 0, input, privateKey.getEncoded().length, othersPublicKey.getEncoded().length);
                 KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH");
                 keyAgreement.init(privateKey);
                 keyAgreement.doPhase(othersPublicKey, true);
@@ -289,8 +286,7 @@ public class Client {
             byte[] ivBytes = Arrays.copyOfRange(combined, 0, cipher.getBlockSize());
             cipher.init(Cipher.DECRYPT_MODE, secretKey, new IvParameterSpec(ivBytes));
             byte[] decryptedBytes = cipher.doFinal(combined, cipher.getBlockSize(), combined.length - cipher.getBlockSize());
-            String plainText = new String(decryptedBytes, StandardCharsets.UTF_8);
-            return plainText;
+            return new String(decryptedBytes, StandardCharsets.UTF_8);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Not your message", e);
             return "";

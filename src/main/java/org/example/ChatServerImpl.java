@@ -9,7 +9,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class ChatServerImpl extends UnicastRemoteObject implements ChatServerInterface {
-    private HashMap<Integer, HashMap<String, String>> bulletinBoard;
+    private final HashMap<Integer, HashMap<String, String>> bulletinBoard;
     private static final Logger LOGGER = Logger.getLogger(ChatServerImpl.class.getName());
     private int messageCount;
     private final static int MAX_MESSAGE_COUNT = 10000;

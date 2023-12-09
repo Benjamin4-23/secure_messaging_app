@@ -17,26 +17,27 @@ public class LoadBalancerImpl extends UnicastRemoteObject implements LoadBalance
         checkExtraServers();
     }
 
-    public boolean postMessage(int cell, String hashedTag, String message) throws RemoteException {
+    public void postMessage(int cell, String hashedTag, String message) throws RemoteException {
         for (ChatServerInterface server : serverConnections) {
             if (!server.isFull()) {
-                boolean gelukt = server.postMessage(cell, hashedTag, message);
-                if (gelukt) return true;
+                boolean success = server.postMessage(cell, hashedTag, message);
+                if (success) return;
             }
         }
         checkExtraServers();
-        return false;
+        postMessage(cell,hashedTag,message);
     }
 
-    public String getMessage(int cell, String tag) throws RemoteException {
+    public List<String> getMessage(int cell, String tag) throws RemoteException {
+        List<String> messages = new ArrayList<>();
         for (ChatServerInterface server : serverConnections) {
             String message = server.getMessage(cell, tag);
             if (message != null) {
                 checkReduceServers();
-                return message;
+                messages.add(message);
             }
         }
-        return null;
+        return messages;
     }
 
     private void checkExtraServers() {

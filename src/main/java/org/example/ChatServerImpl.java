@@ -73,15 +73,6 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServerInt
         return messageCount >= (MAX_MESSAGE_COUNT*0.9);
     }
 
-    public boolean cellContainsTag(int cell, String tag) {
-        try {
-            if (getMessage(cell, tag) != null) return true;
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error checking if tag exists in cell", e);
-        }
-        return false;
-    }
-
     @Override
     public boolean isEmpty() throws RemoteException {
         return bulletinBoard.isEmpty();

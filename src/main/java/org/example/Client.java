@@ -1,5 +1,6 @@
 package org.example;
 
+import java.awt.*;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.security.KeyFactory;
@@ -14,7 +15,6 @@ import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.awt.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,6 +23,7 @@ import java.rmi.Naming;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
 import java.util.Random;
 import javax.crypto.*;
 import javax.swing.*;
@@ -64,6 +65,7 @@ public class Client {
     private static final Logger LOGGER = Logger.getLogger(Client.class.getName());
     private static final int TAG_LENGTH = 10;
     private AtomicInteger bumpFileIsGenerated = new AtomicInteger(0);
+    private int sendServer;
 
     public Client() {
         String host = "localhost";
@@ -136,22 +138,6 @@ public class Client {
         panelBump.add(buttonBump);
     }
 
-    private String getBumpName() {
-        while (true) {
-            File[] bumpFiles = new File(".").listFiles((dir, filename) -> filename.toLowerCase().endsWith("bump.txt") && !filename.toLowerCase().startsWith(name.toLowerCase()));
-            if (bumpFiles != null && bumpFiles.length != 0) {
-                String fileName = bumpFiles[0].getName();
-                return fileName.substring(0, fileName.indexOf("bump.txt"));
-            } else {
-                try {
-                    Thread.sleep(500);
-                } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, "Error sleeping", e);
-                }
-            }
-        }
-    }
-
     private void initialiseTextPanel () {
         labelText.setLocation(0,0);
         labelText.setPreferredSize(new Dimension(300, 220));
@@ -189,10 +175,7 @@ public class Client {
             String encryptedMessage = encrypt(formattedMessage);
 
             try {
-                while (!loadBalancer.postMessage(sendCell, getHash(sendTag), encryptedMessage)) {
-                    nextCell = generateRandomIndex();
-                    nextTag = generateTag(TAG_LENGTH);
-                }
+                loadBalancer.postMessage(sendCell, getHash(sendTag), encryptedMessage);
                 sendTag = nextTag;
                 sendCell = nextCell;
                 deriveKey();
@@ -204,21 +187,24 @@ public class Client {
         }
     }
 
-
-
     private void read() {
         try {
-            String message = loadBalancer.getMessage(receiveCell, receiveTag);
-            if (message != null) {
-                message = decrypt(message);
-                String[] parts = message.split("'");
-                message = parts[0];
-                if (labelText.getText().isEmpty()) labelText.setText(message);
-                else labelText.setText(labelText.getText() + "\n" + message);
+            List<String> messages = loadBalancer.getMessage(receiveCell, receiveTag);
+            if (!messages.isEmpty()) {
+                for (String message: messages) {
+                    message = decrypt(message);
 
-                receiveCell = Integer.parseInt(parts[1]);
-                receiveTag = parts[2];
-                deriveKey();
+                    if (message != null && message.split("'").length == 3) {
+                        String[] parts = message.split("'");
+                        message = parts[0];
+                        if (labelText.getText().isEmpty()) labelText.setText(message);
+                        else labelText.setText(labelText.getText() + "\n" + message);
+
+                        receiveCell = Integer.parseInt(parts[1]);
+                        receiveTag = parts[2];
+                        deriveKey();
+                    }
+                }
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error in read()", e);
@@ -265,22 +251,6 @@ public class Client {
         }
     }
 
-    private String getHash(String text) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(text.getBytes());
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = String.format("%02X", b);
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error creating hash", e);
-        }
-        return null;
-    }
-
     private void generateKeys() {
         try {
             String curveName = "secp256r1";
@@ -322,17 +292,9 @@ public class Client {
             String plainText = new String(decryptedBytes, StandardCharsets.UTF_8);
             return plainText;
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error during decryption", e);
-            return null;
+            LOGGER.log(Level.SEVERE, "Not your message", e);
+            return "";
         }
-    }
-
-    private String generateTag(int length) {
-        StringBuilder stringBuilder = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            stringBuilder.append(CHARACTERS.charAt(random.nextInt(CHARACTERS.length())));
-        }
-        return stringBuilder.toString();
     }
 
     private void generateBumpFile() {
@@ -350,8 +312,20 @@ public class Client {
         }
     }
 
-    private int generateRandomIndex() {
-        return random.nextInt(loadBalancer.MAX_CELL_NUMBER);
+    private String getBumpName() {
+        while (true) {
+            File[] bumpFiles = new File(".").listFiles((dir, filename) -> filename.toLowerCase().endsWith("bump.txt") && !filename.toLowerCase().startsWith(name.toLowerCase()));
+            if (bumpFiles != null && bumpFiles.length != 0) {
+                String fileName = bumpFiles[0].getName();
+                return fileName.substring(0, fileName.indexOf("bump.txt"));
+            } else {
+                try {
+                    Thread.sleep(500);
+                } catch (Exception e) {
+                    LOGGER.log(Level.SEVERE, "Error sleeping", e);
+                }
+            }
+        }
     }
 
     private void getBumpFile(String nameOfPerson) {
@@ -376,4 +350,33 @@ public class Client {
             LOGGER.log(Level.SEVERE, "Error reading or deleting bump file", e);
         }
     }
+
+    private int generateRandomIndex() {
+        return random.nextInt(loadBalancer.MAX_CELL_NUMBER);
+    }
+
+    private String generateTag(int length) {
+        StringBuilder stringBuilder = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            stringBuilder.append(CHARACTERS.charAt(random.nextInt(CHARACTERS.length())));
+        }
+        return stringBuilder.toString();
+    }
+
+    private String getHash(String text) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(text.getBytes());
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = String.format("%02X", b);
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error creating hash", e);
+        }
+        return null;
+    }
+
 }
